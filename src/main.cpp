@@ -32,6 +32,9 @@ void setup()
   accel.setRange(LIS3DH_RANGE_4_G);   // 2, 4, 8 or 16 G!
   ProtomatterStatus status = matrix.begin();
 
+  matrix.fillScreen(0);
+  matrix.print("Hello");
+  matrix.show();
 /*
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
