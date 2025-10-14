@@ -1,0 +1,2 @@
+#define SECRET_SSID "_2"
+#define SECRET_PASS "BOBDIPIXEL8998"

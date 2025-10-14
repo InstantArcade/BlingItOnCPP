@@ -20,50 +20,106 @@ uint8_t oePin      = 14;
 #define HEIGHT   64 // Matrix height (pixels)
 #define NUM_ADDR_PINS 5
 
-Adafruit_Protomatter matrix(
+#include "helpers.h"
+#include "Visualization.h"
+#include "VisConcentricCircles.h"
+#include "VisCirclePacker.h"
+
+
+Adafruit_Protomatter thematrix(
   WIDTH, 4, 1, rgbPins, NUM_ADDR_PINS, addrPins,
   clockPin, latchPin, oePin, true);
 
+Adafruit_Protomatter *matrix = &thematrix;
 float wave = 0;
+
+Visualization *pVis = nullptr;
+
+float globalGamma = PANEL_GAMMA;
 
 void setup() 
 {
   Serial.begin(115200);
-  accel.setRange(LIS3DH_RANGE_4_G);   // 2, 4, 8 or 16 G!
-  ProtomatterStatus status = matrix.begin();
 
-  matrix.fillScreen(0);
-  matrix.print("Hello");
-  matrix.show();
+  generateHSVTable(); // create the HSV colors or they will all be black
+
+  ProtomatterStatus status = thematrix.begin();
+
+  thematrix.fillScreen(0);
+  thematrix.print("Hello");
+  thematrix.show();
+
+  delay(100); // give the board a little time to get the accelerometer ready
+  if (!accel.begin(0x19)) {
+    Serial.println("Couldn't find accelerometer");
+    thematrix.setCursor(0,10);
+    thematrix.print("Accel err!");
+    thematrix.show();
+    while(1);
+  }
+  accel.setRange(LIS3DH_RANGE_4_G);   // 2, 4, 8 or 16 G!
 /*
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
-      Serial.print(".");
+      Serial.print("."); this is a test OK .oOo.oOo.oOo.oOo.oOo.oOo.oOo.oOo.
   }
 
   Serial.println("");
   Serial.println("Connected to WiFi");
   //printWifiStatus();
 */
+
+  // pVis = new VisConcentricCircles();
+  pVis = new VisCirclePacker();
+  pVis->init();
+
 }
+
+// FPS Tracking
+int lastTicks = 0;
+int fpsavg[5]={0};
+float fPTimer = 0;
+int fpIndex = 0;
 
 void loop() 
 {
-  wave += 0.1f;
+  int iNow = millis();
+  float delta = (iNow-lastTicks)/1000.0f;
+  lastTicks = iNow;
 
-  if( wave > 6.242f)
-    wave -=6.242f;
+  // Track and display Frames per Second
+  int fps = 1.0f/delta;
+  fpsavg[fpIndex++] = fps;
+  fpIndex %= 5;
+
+  fPTimer += delta;
+  if( fPTimer > 1.0f )
+  {
+    fPTimer -= 1.0f;
+    float ff = (fpsavg[0]+fpsavg[1]+fpsavg[2]+fpsavg[3]+fpsavg[4])/5.0f;
+    printf("%0.2f FPS\n",ff);
+  }
+
+  wave += 0.03f;
+
+  if( wave > PI*2.0f)
+    wave -= PI*2.0f;
 
   // Read accelerometer...
   sensors_event_t event;
-  accel.getEvent(&event);
-  Serial.printf("(%0.1f, %0.1f, %0.1f)\n", event.acceleration.x, event.acceleration.y, event.acceleration.z);
+  accel.getEvent( &event );
+  // Serial.printf("(%0.1f, %0.1f, %0.1f)\n", event.acceleration.x, event.acceleration.y, event.acceleration.z);
 
-  matrix.fillScreen(matrix.color565(64,32,32));
-  matrix.drawPixel(32+sinf(wave)*15,32+cosf(wave*0.97)*15,matrix.color565(255,64,64));
-  matrix.drawPixel(32+sinf(wave+0.1)*15,32+cosf((wave+0.1)*0.97)*15,matrix.color565(255,0,0));
-  matrix.drawPixel(32+sinf(wave+0.2)*15,32+cosf((wave+0.2)*0.97)*15,matrix.color565(0,255,0));
-  matrix.drawPixel(32+sinf(wave+0.3)*15,32+cosf((wave+0.3)*0.97)*15,matrix.color565(0,0,255));
-  matrix.show();
+  float diameter = 30.0f;
+  float step = 0.62f;
+  
+  thematrix.fillScreen(0);
+  // thematrix.drawPixel(32 + sinf(wave)        * diameter, 32 + cosf(wave)          * diameter, thematrix.color565(255,64,64) );
+  // thematrix.drawPixel(32 + sinf(wave+step*1) * diameter, 32 + cosf((wave+step*1)) * diameter, thematrix.color565(255,0,0) );
+  // thematrix.drawPixel(32 + sinf(wave+step*2) * diameter, 32 + cosf((wave+step*2)) * diameter, thematrix.color565(0,255,0) );
+  // thematrix.drawPixel(32 + sinf(wave+step*3) * diameter, 32 + cosf((wave+step*3)) * diameter, thematrix.color565(0,0,255) );
+  pVis->update(delta);
+  // matrix->drawPixel(32,32,matrix->color565(255,255,255));
+  thematrix.show();
 }
