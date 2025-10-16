@@ -2,6 +2,7 @@
 
 #include <arduino.h>
 #include <Adafruit_Protomatter.h> // For RGB matrix
+#include <Adafruit_LIS3DH.h>      // For accelerometer
 
 #define PANEL_RES_X 64 // Number of pixels wide of each INDIVIDUAL panel module. 
 #define PANEL_RES_Y 64 // Number of pixels tall of each INDIVIDUAL panel module.
@@ -185,6 +186,7 @@ extern byte ringMinVal;
 extern float fFocal;
 extern float fXRot, fYRot, fZRot;
 extern float fXRotSpeed, fYRotSpeed, fZRotSpeed;
+extern sensors_event_t global_accelerometer;
 
 float v3_dot_product( vector3 u, vector3 v );
 vector3 normalize( vector3 &v );

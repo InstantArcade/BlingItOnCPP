@@ -12,6 +12,8 @@ float rMult = 1.0f;
 float gMult = 1.0f;
 float bMult = 1.0f;
 
+sensors_event_t global_accelerometer;
+
 
 uint16_t rgbto565Gamma( float r, float g, float b, float gamma = globalGamma )
 {

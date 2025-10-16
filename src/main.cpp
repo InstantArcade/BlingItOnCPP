@@ -24,6 +24,7 @@ uint8_t oePin      = 14;
 #include "Visualization.h"
 #include "VisConcentricCircles.h"
 #include "VisCirclePacker.h"
+#include "VisSnow.h"
 
 
 Adafruit_Protomatter thematrix(
@@ -50,6 +51,7 @@ void setup()
   thematrix.show();
 
   delay(100); // give the board a little time to get the accelerometer ready
+
   if (!accel.begin(0x19)) {
     Serial.println("Couldn't find accelerometer");
     thematrix.setCursor(0,10);
@@ -71,7 +73,8 @@ void setup()
 */
 
   // pVis = new VisConcentricCircles();
-  pVis = new VisCirclePacker();
+  // pVis = new VisCirclePacker();
+  pVis = new VisSnow();
   pVis->init();
 
 }
@@ -109,6 +112,9 @@ void loop()
   // Read accelerometer...
   sensors_event_t event;
   accel.getEvent( &event );
+  // copy it to global accel value
+  global_accelerometer = event;
+
   // Serial.printf("(%0.1f, %0.1f, %0.1f)\n", event.acceleration.x, event.acceleration.y, event.acceleration.z);
 
   float diameter = 30.0f;
