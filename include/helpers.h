@@ -7,38 +7,53 @@
 #define PANEL_RES_X 64 // Number of pixels wide of each INDIVIDUAL panel module. 
 #define PANEL_RES_Y 64 // Number of pixels tall of each INDIVIDUAL panel module.
 
-// #define HALF_PI (1.570796325f)
+// Rotation modifier to auto-convert accelerometer and drawing commands
+// to treat 0,0 as top left with the board sticking out of the top (wearable style)
+// Be sure to use RGBPixel_R() to draw
+#define BOARD_UP 1 // Set this to 0 if you want the normal panel orentation with the board sticking out the right hand side
+
+#define drawPixelRGB888(x,y,r,g,b) drawPixel(x,y,matrix->color565(r,g,b))
 
 #ifdef COLOR_ORDER_BGR
-  #define RGBPixel(x,y,r,g,b) drawPixelRGB888(x,y,b,g,r)
+  #if BOARD_UP
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(63-(y),(x),b,g,r)
+  #else
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(x,y,b,g,r)
+  #endif
   #define ColorInt(r,g,b) color565(b,g,r)
 #elif defined(COLOR_ORDER_RBG)
-  #define RGBPixel(x,y,r,g,b) drawPixelRGB888(x,y,r,b,g)
+  #if BOARD_UP
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(63-(y),(x),r,b,g)
+  #else
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(x,y,r,b,g)
+  #endif
   #define ColorInt(r,g,b) color565(r,b,g)
 #else
-  #define RGBPixel(x,y,r,g,b) drawPixel(x,y,matrix->color565(r,g,b))
+  #if BOARD_UP
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(63-(y),(x),r,g,b)
+  #else
+    #define RGBPixel_R(x,y,r,g,b) drawPixelRGB888(x,y,r,g,b)
+  #endif
   #define ColorInt(r,g,b) color565(r,g,b)
 #endif
 
-// #define FLIP_BUFFER matrix->flipDMABuffer();
-//extern MatrixPanel_I2S_DMA *matrix;
-extern Adafruit_Protomatter *matrix;
+#if BOARD_UP
+  #define Pixel_R(x,y,col) drawPixel(63-y,x,col)
+#else
+  #define Pixel_R(x,y,col) drawPixel(x,y,col)
+#endif
 
+extern Adafruit_Protomatter *matrix;
 
 #define Z_INFINITY (99999.99f)
 extern bool cycleHue;
 
-#define PANEL_GAMMA (1.1f)
-// #define PANEL_GAMMA (1.2f)
+#define PANEL_GAMMA (1.1f) // Also try 1.2f
 extern float globalGamma;
 
 extern float rMult;
 extern float gMult;
 extern float bMult;
-
-
-void drawRippedSprite(int x, int y, const int *planeOffsets, const int *frameOffsets, const byte* dataSrc, byte frame, uint16_t color_override );
-void drawRippedSpriteWithMask(int x, int y, const int *planeOffsets, const int *frameOffsets, const byte* dataSrc, byte frame, uint16_t color_override, uint16_t mask_color );
 
 int inline imin(int a, int b, int c)
 {
@@ -57,11 +72,7 @@ int inline imax(int a, int b, int c)
 class vector3 
 {
 public:
-  // union
-  // {
     float x,y,z;
-  //   float r,g,b;
-  // };
 
   vector3() { x = 0; y = 0; z = 0; }
   vector3(float x_, float y_, float z_){ x=x_; y=y_; z=z_; }
@@ -120,20 +131,7 @@ const float PI2 = PI*2.0f;
 inline void constrainPI2( float &rfVal ){ while(rfVal>PI2){rfVal-=PI2;} while(rfVal<-PI2){rfVal+=PI2;} } 
 inline void constrainPI2( vector3 &rVec ){ while(rVec.x>PI2){rVec.x-=PI2;} while(rVec.x<-PI2){rVec.x+=PI2;} while(rVec.y>PI2){rVec.y-=PI2;} while(rVec.y<-PI2){rVec.y+=PI2;} while(rVec.z>PI2){rVec.z-=PI2;} while(rVec.z<-PI2){rVec.z+=PI2;}} 
 
-// inline void constrainPI2( float &rfVal )
-// {
-//     while( rfVal > PI2 )
-//     {
-//         rfVal-=PI2;
-        
-//     }
-//     while( rfVal <= PI2 )
-//     {
-//         rfVal+=PI2;
-//     }
-// }
-
-inline float sqrt3( float x)  // fast sqrt approximation
+inline float sqrt3( float x)  // fast sqrt approximation (the Quake hack)
 {
   union
   {
@@ -175,14 +173,7 @@ rgb hsv2rgb(hsv in);
 extern byte HSVColors[360*3];
 extern uint16_t HSV565[360];
 
-extern byte shadedBall2[];
-extern byte shadedBall3[];
-extern byte spinning_ring[];
 extern int hueOffset;
-extern byte ringMaxVal;
-extern byte ringMinVal;
-
-
 extern float fFocal;
 extern float fXRot, fYRot, fZRot;
 extern float fXRotSpeed, fYRotSpeed, fZRotSpeed;
@@ -204,20 +195,7 @@ void halfspace_triangle(int x1, int y1, int x2, int y2, int x3, int y3, byte r, 
 void halfspace_triangle_v(vector3 v1, vector3 v2, vector3 v3, byte r, byte g, byte b);
 void halfspace_triangle_lerp(vector3 v1, vector3 v2, vector3 v3, vector3 c1, vector3 c2, vector3 c3);
 void BresenhamLine( int x0, int y0, int x1, int y1, byte r, byte g, byte b );
-void BresenhamsCircle( int x0, int y0, int radius, int color );
+void BresenhamsCircle( int x0, int y0, int radius, byte r, byte g, byte b );
 
 uint16_t rgbto565Gamma( float r, float g, float b, float gamma);
 uint16_t rgbto565Gamma( byte r, byte g, byte b, float gamma);
-
-struct VISOPTION
-{
-  // Visualization *pVis;
-  bool showTime;    // default is true
-  bool cornerTime;  // default is false
-  bool clearScreen; // default is true
-
-  VISOPTION( bool st, bool ct, bool cs )
-  {
-    showTime = st; cornerTime = ct; clearScreen = cs;
-  }
-};

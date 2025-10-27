@@ -1,10 +1,6 @@
 #include "helpers.h"
 
-// float zbuffer[64*64];
-// byte screenBuffer[64*64*3];
-// byte screenBuffer2[64*64*3];
-
-float fFocal = 300; // was 300;
+float fFocal = 300; // Focal lenght for 3D things
 float fXRot = 0, fYRot = 0, fZRot = 0;
 float fXRotSpeed = 0, fYRotSpeed = 0, fZRotSpeed = 0;
 
@@ -13,7 +9,6 @@ float gMult = 1.0f;
 float bMult = 1.0f;
 
 sensors_event_t global_accelerometer;
-
 
 uint16_t rgbto565Gamma( float r, float g, float b, float gamma = globalGamma )
 {
@@ -73,6 +68,14 @@ vector3 normalize( vector3 &v )
   }
 #endif
 
+/////////////////////////////////////////////
+//
+// make_counter_clockwise takes three x,y 
+// point references and re-orders them to
+// be in counter clockwise winding order if
+// needed
+//
+/////////////////////////////////////////////
 void make_counter_clockwise(int& x1, int& y1, int& x2, int& y2, int& x3, int& y3)
 {
     int xm = (x1 + x2 + x3) / 3; // center point x coordinate
@@ -104,6 +107,12 @@ void make_counter_clockwise(int& x1, int& y1, int& x2, int& y2, int& x3, int& y3
     }
 }
 
+/////////////////////////////////////////////
+//
+// halfspace_triangle renders a filled 
+// triangle using the fast halfspace method
+//
+/////////////////////////////////////////////
 void halfspace_triangle(int x1, int y1, int x2, int y2, int x3, int y3, byte r, byte g, byte b)
 {
   int minx = imin(x1,x2,x3);
@@ -125,12 +134,13 @@ void halfspace_triangle(int x1, int y1, int x2, int y2, int x3, int y3, byte r, 
           (x2 - x3) * (y - y2) - (y2 - y3) * (x - x2) >= 0 &&
           (x3 - x1) * (y - y3) - (y3 - y1) * (x - x3) >= 0 )
       {
-        matrix->RGBPixel(x,y,r,g,b);
+        matrix->RGBPixel_R(x,y,r,g,b);
       }
     }
   }
 }
 
+// As above, but using vector3 values
 void halfspace_triangle_v(vector3 v1, vector3 v2, vector3 v3, byte r, byte g, byte b)
 {
   halfspace_triangle(v1.x,v1.y,v2.x,v2.y,v3.x,v3.y,r,g,b);
@@ -140,6 +150,14 @@ void halfspace_triangle_v(vector3 v1, vector3 v2, vector3 v3, byte r, byte g, by
 #define GREEN(v) v.y
 #define BLUE(v) v.z
 
+/////////////////////////////////////////////
+//
+// halfspace_triangle_lerp renders a filled 
+// triangle using the fast halfspace method
+// and interpolates colors between the three
+// points
+//
+/////////////////////////////////////////////
 void halfspace_triangle_lerp( float *zbuffer, vector3 v1, vector3 v2, vector3 v3, vector3 c1, vector3 c2, vector3 c3)
 {
   int minx = imin(v1.x,v2.x,v3.x);
@@ -182,7 +200,7 @@ void halfspace_triangle_lerp( float *zbuffer, vector3 v1, vector3 v2, vector3 v3
 
         if( zl < zbuffer[y*64+x] )
         {
-          matrix->RGBPixel(x,y,r,g,b);
+          matrix->RGBPixel_R(x,y,r,g,b);
           zbuffer[y*64+x] = zl;
         }
       }
@@ -190,182 +208,15 @@ void halfspace_triangle_lerp( float *zbuffer, vector3 v1, vector3 v2, vector3 v3
   }
 }
 
-byte HSVColors[360*3];
-uint16_t HSV565[360];
+byte HSVColors[360*3]; // Buffer for HSV color values r,g,b bytes
+uint16_t HSV565[360]; // Buffer for HSV color values RGB565 16 bit format
 int hueOffset = 0;
 bool cycleHue = true;
 byte hueCycleDelay = 10;
 byte hueCycleCount = 0;
 
-byte shadedBall2[]={
-  0,0,118,168,153,80,0,0,
-  0,190,238,221,201,182,112,0,
-  108,226,233,239,212,195,131,53,
-  155,202,227,227,208,169,116,72,
-  131,184,196,198,183,139,99,69,
-  67,144,149,151,134,108,82,45,
-  0,89,111,101,89,80,78,19,
-  0,0,47,69,71,47,0,0
-};
-
-byte shadedBall3[]={
-    0,118,153,  0,
-  108,233,212,131,
-  131,196,183, 99,
-    0, 47, 71,  0,
-};
-
-byte  ringMaxVal = 0;
-byte  ringMinVal = 255;
-
-// 16 frames in total, each an 8x8 sprite
-byte spinning_ring[]={
-// 0
-        0,      146,    167,    169,    167,    152,    0,      0,      // Row 0
-        134,    164,    157,    129,    125,    157,    153,    0,      // Row 1
-        148,    152,    86,     0,      0,      113,    153,    121,    // Row 2
-        147,    141,    0,      0,      0,      0,      149,    128,    // Row 3
-        139,    141,    0,      0,      0,      0,      148,    122,    // Row 4
-        113,    151,    135,    0,      0,      147,    148,    85,     // Row 5
-        0,      115,    152,    156,    156,    151,    105,    0,      // Row 6
-        0,      0,      93,     102,    100,    75,     0,      0,      // Row 7
-// 1
-        0,      156,    168,    171,    167,    158,    0,      0,      // Row 0
-        141,    163,    162,    138,    136,    156,    149,    0,      // Row 1
-        146,    149,    75,     0,      0,      102,    150,    121,    // Row 2
-        141,    131,    0,      0,      0,      0,      140,    123,    // Row 3
-        132,    132,    0,      0,      0,      0,      141,    111,    // Row 4
-        107,    144,    135,    0,      0,      148,    143,    72,     // Row 5
-        0,      112,    147,    153,    154,    145,    99,     0,      // Row 6
-        0,      0,      80,     99,     93,     79,     0,      0,      // Row 7
-// 2
-        0,      0,      164,    171,    166,    160,    0,      0,      // Row 0
-        0,      164,    166,    151,    150,    159,    147,    0,      // Row 1
-        146,    147,    99,     0,      0,      101,    140,    113,    // Row 2
-        134,    114,    0,      0,      0,      0,      128,    108,    // Row 3
-        119,    123,    0,      0,      0,      0,      133,    99,     // Row 4
-        98,     134,    136,    0,      0,      147,    134,    71,     // Row 5
-        0,      100,    139,    150,    152,    135,    94,     0,      // Row 6
-        0,      0,      77,     90,     82,     69,     0,      0,      // Row 7
-// 3
-        0,      0,      159,    171,    161,    0,      0,      0,      // Row 0
-        0,      163,    170,    171,    166,    161,    146,    0,      // Row 1
-        143,    147,    120,    73,     85,     106,    138,    106,    // Row 2
-        125,    100,    0,      0,      0,      0,      110,    93,     // Row 3
-        101,    106,    0,      0,      0,      0,      122,    80,     // Row 4
-        76,     120,    141,    144,    147,    144,    121,    62,     // Row 5
-        0,      74,     116,    143,    145,    117,    61,     0,      // Row 6
-        0,      0,      53,     59,     55,     52,     0,      0,      // Row 7
-// 4
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      161,    172,    175,    171,    161,    138,    0,      // Row 1
-        138,    151,    132,    115,    113,    125,    136,    100,    // Row 2
-        115,    85,     0,      0,      0,      0,      82,     82,     // Row 3
-        79,     73,     0,      0,      0,      52,     94,     61,     // Row 4
-        58,     98,     130,    132,    139,    136,    102,    52,     // Row 5
-        0,      52,     94,     116,    120,    95,     52,     0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      165,    174,    169,    148,    0,      0,      // Row 1
-        145,    158,    161,    159,    155,    153,    140,    86,     // Row 2
-        113,    97,     80,     52,     52,     68,     78,     68,     // Row 3
-        54,     52,     52,     0,      0,      52,     52,     52,     // Row 4
-        53,     52,     51,     52,     52,     51,     52,     52,     // Row 5
-        0,      0,      52,     52,     52,     52,     0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 1
-        146,    160,    170,    174,    171,    161,    140,    0,      // Row 2
-        116,    124,    109,    113,    104,    98,     99,     76,     // Row 3
-        53,     52,     129,    148,    148,    138,    59,     52,     // Row 4
-        0,      52,     51,     78,     88,     51,     52,     0,      // Row 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 7
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 1
-        0,      161,    171,    173,    165,    156,    141,    0,      // Row 2
-        126,    151,    161,    161,    156,    147,    130,    89,     // Row 3
-        56,     66,     116,    137,    140,    127,    64,     52,     // Row 4
-        0,      52,     70,     81,     82,     63,     52,     0,      // Row 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 8
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 1
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 2
-        138,    160,    169,    173,    168,    161,    145,    109,    // Row 3
-        70,     92,     106,    110,    105,    92,     75,     53,     // Row 4
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 9
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 1
-        0,      144,    145,    149,    147,    144,    144,    0,      // Row 2
-        144,    147,    144,    145,    150,    148,    146,    124,    // Row 3
-        100,    144,    161,    164,    161,    149,    120,    70,     // Row 4
-        0,      52,     69,     81,     78,     62,     52,     0,      // Row 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 10
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 1
-        143,    150,    150,    154,    156,    154,    142,    0,      // Row 2
-        149,    139,    106,    104,    108,    120,    148,    132,    // Row 3
-        123,    161,    168,    169,    166,    161,    147,    98,     // Row 4
-        0,      93,     112,    129,    121,    100,    70,     0,      // Row 5
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 11
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      0,      152,    152,    150,    146,    0,      0,      // Row 1
-        146,    155,    150,    143,    148,    155,    153,    102,    // Row 2
-        152,    142,    76,     86,     75,     100,    151,    135,    // Row 3
-        138,    161,    161,    0,      0,      160,    154,    108,    // Row 4
-        52,     126,    157,    162,    160,    146,    112,    52,     // Row 5
-        0,      0,      52,     77,     77,     52,     0,      0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 12
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 0
-        0,      152,    158,    159,    159,    155,    129,    0,      // Row 1
-        149,    157,    131,    105,    116,    141,    158,    118,    // Row 2
-        152,    146,    0,      0,      0,      0,      149,    139,    // Row 3
-        144,    158,    0,      0,      0,      147,    156,    121,    // Row 4
-        98,     151,    163,    166,    165,    158,    131,    60,     // Row 5
-        0,      88,     111,    122,    121,    96,     66,     0,      // Row 6
-        0,      0,      0,      0,      0,      0,      0,      0,      // Row 7
-// 13
-        0,      0,      138,    153,    141,    0,      0,      0,      // Row 0
-        0,      158,    161,    157,    159,    160,    147,    0,      // Row 1
-        155,    158,    123,    86,     92,     131,    161,    132,    // Row 2
-        153,    148,    0,      0,      0,      0,      157,    138,    // Row 3
-        147,    157,    0,      0,      0,      0,      158,    130,    // Row 4
-        115,    161,    163,    153,    156,    158,    148,    79,     // Row 5
-        0,      101,    137,    154,    149,    127,    78,     0,      // Row 6
-        0,      0,      53,     61,     58,     52,     0,      0,      // Row 7
-// 14
-        0,      0,      157,    161,    159,    150,    0,      0,      // Row 0
-        0,      162,    162,    147,    147,    163,    153,    0,      // Row 1
-        157,    158,    106,    0,      0,      130,    163,    135,    // Row 2
-        154,    148,    0,      0,      0,      0,      157,    138,    // Row 3
-        150,    153,    0,      0,      0,      0,      157,    133,    // Row 4
-        109,    162,    154,    0,      0,      159,    153,    105,    // Row 5
-        0,      114,    152,    157,    156,    142,    97,     0,      // Row 6
-        0,      0,      52,     91,     83,     69,     0,      0,      // Row 7
-// 15
-        0,      129,    162,    166,    162,    150,    0,      0,      // Row 0
-        157,    163,    158,    134,    137,    158,    153,    0,      // Row 1
-        151,    157,    98,     0,      0,      125,    158,    122,    // Row 2
-        152,    147,    0,      0,      0,      0,      153,    136,    // Row 3
-        146,    151,    0,      0,      0,      0,      153,    128,    // Row 4
-        125,    157,    147,    0,      0,      155,    154,    97,     // Row 5
-        0,      121,    153,    161,    159,    152,    105,    0,      // Row 6
-        0,      0,      85,     103,    95,     72,     0,      0,      // Row 7
-};
-
+// colorspace conversion
+// Convert an rgb stucture to hsv structure
 hsv rgb2hsv(rgb in)
 {
     hsv         out;
@@ -410,7 +261,8 @@ hsv rgb2hsv(rgb in)
     return out;
 }
 
-
+// colorspace conversion
+// convert an hsv structure to an rgb structure
 rgb hsv2rgb(hsv in)
 {
     float      hh, p, q, t, ff;
@@ -469,11 +321,9 @@ rgb hsv2rgb(hsv in)
     return out;
 }
 
+// fill the HSVTables so we don't need to calculate them on the fly
 void generateHSVTable()
 {
-//    if( !HSVColors )
-//        HSVColors = new byte[360*3];
-    
     // generate HSVColors
     for( int i = 0; i < 360; i++ )
     {
@@ -501,73 +351,7 @@ void cycleTheHue( float delta )
   }
 }
 
-void drawRippedSprite(int x, int y, const int *planeOffsets, const int *frameOffsets, const byte* dataSrc, byte frame, uint16_t color_override )
-{
-  uint32_t dataOffset = frameOffsets[frame*2+1];
-  const byte *pData = dataSrc + dataOffset;
-  uint16_t numPlanes = frameOffsets[frame*2];
-  int skipPlanes = 0;
-
-  for( int i = 0; i < frame; i++ )
-  {
-    skipPlanes += frameOffsets[i*2]; // add plane count of each frame we're skiping 
-  }
-  
-  for( int i = 0; i < numPlanes; i++ )
-  {
-    pData = dataSrc + planeOffsets[skipPlanes+i];
-
-    pData++; // skip alpha
-    byte r= *pData++;
-    byte g= *pData++;
-    byte b= *pData++;
-    byte xoff = *(pData++);
-    byte yoff = *(pData++);
-    byte w = *(pData++);
-    byte h = *(pData++);
-
-
-    if( color_override != 0 )
-      matrix->drawBitmap(x+xoff,y+yoff,pData,w,h,color_override);
-    else
-      matrix->drawBitmap(x+xoff,y+yoff,pData,w,h,matrix->color565(r,g,b));
-  }
-}
-
-void drawRippedSpriteWithMask(int x, int y, const int *planeOffsets, const int *frameOffsets, const byte* dataSrc, byte frame, uint16_t color_override, uint16_t mask_color )
-{
-  uint32_t dataOffset = frameOffsets[frame*2+1];
-  const byte *pData = dataSrc + dataOffset;
-  uint16_t numPlanes = frameOffsets[frame*2];
-  int skipPlanes = 0;
-
-  for( int i = 0; i < frame; i++ )
-  {
-    skipPlanes += frameOffsets[i*2]; // add plane count of each frame we're skiping 
-  }
-  
-  
-  for( int i = 0; i < numPlanes; i++ )
-  {
-    pData = dataSrc + planeOffsets[skipPlanes+i];
-
-    pData++; // skip alpha
-    byte r= *pData++;
-    byte g= *pData++;
-    byte b= *pData++;
-    byte xoff = *(pData++);
-    byte yoff = *(pData++);
-    byte w = *(pData++);
-    byte h = *(pData++);
-
-    // now draw the normal color
-    if( color_override != 0 )
-      matrix->drawBitmap(x+xoff,y+yoff,pData,w,h,color_override);
-    else
-      matrix->drawBitmap(x+xoff,y+yoff,pData,w,h,matrix->color565(r,g,b));
-  }
-}
-
+// Bresenham's algorithm for fast line drawing
 void BresenhamLine( int x0, int y0, int x1, int y1, byte r, byte g, byte b )
 {   
   int dx =  abs(x1-x0); // delta x
@@ -583,7 +367,7 @@ void BresenhamLine( int x0, int y0, int x1, int y1, byte r, byte g, byte b )
     // bound check
     if( x0 >= 0 && x0 < 64 && y0 >=0 && y0 <64 )
     {
-      matrix->RGBPixel(x0,y0,r,g,b);
+      matrix->RGBPixel_R(x0,y0,r,g,b);
     }
     if (x0 == x1 && y0 == y1) break; // we reached the destination - stop now
     
@@ -601,7 +385,8 @@ void BresenhamLine( int x0, int y0, int x1, int y1, byte r, byte g, byte b )
   }     
 }
 
-void BresenhamsCircle(int x0, int y0, int radius, int color )
+// Bresenham's algorithm for fast circle drawing
+void BresenhamsCircle(int x0, int y0, int radius, byte r, byte g, byte b )
 {
   int x = 0;
   int y = radius;
@@ -609,15 +394,15 @@ void BresenhamsCircle(int x0, int y0, int radius, int color )
 
   while (x <= y) 
   {
-    matrix->drawPixel(x + x0, y + y0, color);
-    matrix->drawPixel(y + x0, x + y0, color);
-    matrix->drawPixel(-x + x0, y + y0, color);
-    matrix->drawPixel(-y + x0, x + y0, color);
+    matrix->RGBPixel_R( x + x0,  y + y0, r,g,b);
+    matrix->RGBPixel_R( y + x0,  x + y0, r,g,b);
+    matrix->RGBPixel_R(-x + x0,  y + y0, r,g,b);
+    matrix->RGBPixel_R(-y + x0,  x + y0, r,g,b);
 
-    matrix->drawPixel(x + x0, -y + y0, color);
-    matrix->drawPixel(y + x0, -x + y0, color);
-    matrix->drawPixel(-x + x0, -y + y0, color);
-    matrix->drawPixel(-y + x0, -x + y0, color);
+    matrix->RGBPixel_R( x + x0, -y + y0, r,g,b);
+    matrix->RGBPixel_R( y + x0, -x + y0, r,g,b);
+    matrix->RGBPixel_R(-x + x0, -y + y0, r,g,b);
+    matrix->RGBPixel_R(-y + x0, -x + y0, r,g,b);
   
     if( d < 0 ) 
     {

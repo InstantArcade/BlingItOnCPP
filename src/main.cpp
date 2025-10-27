@@ -19,16 +19,17 @@ uint8_t oePin      = 14;
 #define WIDTH   64 // Matrix width (pixels)
 #define HEIGHT   64 // Matrix height (pixels)
 #define NUM_ADDR_PINS 5
+#define BIT_DEPTH 5
 
+#include "font.h"
 #include "helpers.h"
 #include "Visualization.h"
 #include "VisConcentricCircles.h"
 #include "VisCirclePacker.h"
 #include "VisSnow.h"
 
-
 Adafruit_Protomatter thematrix(
-  WIDTH, 4, 1, rgbPins, NUM_ADDR_PINS, addrPins,
+  WIDTH, BIT_DEPTH, 1, rgbPins, NUM_ADDR_PINS, addrPins,
   clockPin, latchPin, oePin, true);
 
 Adafruit_Protomatter *matrix = &thematrix;
@@ -60,23 +61,24 @@ void setup()
     while(1);
   }
   accel.setRange(LIS3DH_RANGE_4_G);   // 2, 4, 8 or 16 G!
-/*
-  WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print("."); this is a test OK .oOo.oOo.oOo.oOo.oOo.oOo.oOo.oOo.
-  }
 
-  Serial.println("");
-  Serial.println("Connected to WiFi");
-  //printWifiStatus();
-*/
+  // Comment back in to use WiFi
+  // WiFi.begin(ssid, pass);
+  // while (WiFi.status() != WL_CONNECTED) {
+  //     delay(500);
+  //     Serial.print(".");
+  // }
 
-  // pVis = new VisConcentricCircles();
-  // pVis = new VisCirclePacker();
-  pVis = new VisSnow();
+  // Serial.println("");
+  // Serial.println("Connected to WiFi");
+  // printWifiStatus();
+
+
+  // Set the visualization
+  pVis = new VisConcentricCircles();
+  //pVis = new VisCirclePacker();
+  //pVis = new VisSnow();
   pVis->init();
-
 }
 
 // FPS Tracking
@@ -84,6 +86,8 @@ int lastTicks = 0;
 int fpsavg[5]={0};
 float fPTimer = 0;
 int fpIndex = 0;
+
+float red_wave = 0;
 
 void loop() 
 {
@@ -112,6 +116,12 @@ void loop()
   // Read accelerometer...
   sensors_event_t event;
   accel.getEvent( &event );
+  #if BOARD_UP
+    float nx = event.acceleration.y; // handle rotated board
+    float ny = event.acceleration.x * -1.0f;
+    event.acceleration.x = nx;
+    event.acceleration.y = ny;
+  #endif
   // copy it to global accel value
   global_accelerometer = event;
 
@@ -121,11 +131,11 @@ void loop()
   float step = 0.62f;
   
   thematrix.fillScreen(0);
-  // thematrix.drawPixel(32 + sinf(wave)        * diameter, 32 + cosf(wave)          * diameter, thematrix.color565(255,64,64) );
-  // thematrix.drawPixel(32 + sinf(wave+step*1) * diameter, 32 + cosf((wave+step*1)) * diameter, thematrix.color565(255,0,0) );
-  // thematrix.drawPixel(32 + sinf(wave+step*2) * diameter, 32 + cosf((wave+step*2)) * diameter, thematrix.color565(0,255,0) );
-  // thematrix.drawPixel(32 + sinf(wave+step*3) * diameter, 32 + cosf((wave+step*3)) * diameter, thematrix.color565(0,0,255) );
   pVis->update(delta);
-  // matrix->drawPixel(32,32,matrix->color565(255,255,255));
+
+  red_wave += 0.1f;
+  if( red_wave > PI2 ) red_wave -= PI2;
+  byte red = (byte)(128.0f+128.0f*sinf(red_wave));
+  draw_string(1,28,red,0,0,"SUPERCON");
   thematrix.show();
 }

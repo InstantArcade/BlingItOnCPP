@@ -8,7 +8,7 @@ class SnowParticle
 public:
   float x,y;
   float vx,vy;
-  uint16_t color;
+  byte r,g,b;
   float speedmul = 1.0f;
   bool active;
 
@@ -16,7 +16,7 @@ public:
   {
     x = y = vx = vy = 0;
     active = false;
-    color = matrix->color565(255,255,255);
+    r = g = b = 255;
     speedmul = 1.0f + random(100)/100.0f;
   }
 
@@ -42,6 +42,8 @@ public:
     // check collision
     if( collision_bufffer[inx][iny] > 0 )
     {
+      // TODO: Look at the directions we're moving and see if we can slide to the side
+    
       // stop it
       nx = x;
       ny = y;
@@ -73,7 +75,10 @@ void resetSnow()
       snarticles[i].y = y;
       snarticles[i].vx = snarticles[i].vy = 0;
       snarticles[i].active = true;
-      snarticles[i].color = HSV565[random(360)];
+      int c = random(360);
+      snarticles[i].r = HSVColors[c*3+0];
+      snarticles[i].g = HSVColors[c*3+1];
+      snarticles[i].b = HSVColors[c*3+2];
       snarticles[i].speedmul = 1.0f + random(100)/100.0f;
     }
 }
@@ -153,7 +158,7 @@ void VisSnow::update( float delta )
         sp->y = ny;
       }
 
-      matrix->drawPixel( (int)sp->x,(int)sp->y, sp->color );
+      matrix->RGBPixel_R( (int)sp->x,(int)sp->y, sp->r, sp->g, sp->b );
     }
   }
 }
